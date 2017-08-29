@@ -26,77 +26,72 @@
 --
 -- * If an item matches multiple routes, the first rule will be chosen.
 {-# LANGUAGE Rank2Types #-}
+
 module Hakyll.Core.Routes
-    ( UsedMetadata
-    , Routes
-    , runRoutes
-    , idRoute
-    , setExtension
-    , matchRoute
-    , customRoute
-    , constRoute
-    , gsubRoute
-    , metadataRoute
-    , composeRoutes
-    ) where
-
-
---------------------------------------------------------------------------------
-import           System.FilePath                (replaceExtension)
-
+  ( UsedMetadata
+  , Routes
+  , runRoutes
+  , idRoute
+  , setExtension
+  , matchRoute
+  , customRoute
+  , constRoute
+  , gsubRoute
+  , metadataRoute
+  , composeRoutes
+  ) where
 
 --------------------------------------------------------------------------------
-import           Hakyll.Core.Identifier
-import           Hakyll.Core.Identifier.Pattern
-import           Hakyll.Core.Metadata
-import           Hakyll.Core.Provider
-import           Hakyll.Core.Util.String
+import System.FilePath (replaceExtension)
 
+--------------------------------------------------------------------------------
+import Hakyll.Core.Identifier
+import Hakyll.Core.Identifier.Pattern
+import Hakyll.Core.Metadata
+import Hakyll.Core.Provider
+import Hakyll.Core.Util.String
+
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.UTF8 as BSU
+import Crypto.Hash.MD5 (hash)
 
 --------------------------------------------------------------------------------
 -- | When you ran a route, it's useful to know whether or not this used
 -- metadata. This allows us to do more granular dependency analysis.
 type UsedMetadata = Bool
 
-
 --------------------------------------------------------------------------------
 data RoutesRead = RoutesRead
-    { routesProvider   :: Provider
-    , routesUnderlying :: Identifier
-    }
-
+  { routesProvider :: Provider
+  , routesUnderlying :: Identifier
+  }
 
 --------------------------------------------------------------------------------
 -- | Type used for a route
 newtype Routes = Routes
-    { unRoutes :: RoutesRead -> Identifier -> IO (Maybe FilePath, UsedMetadata)
-    }
-
+  { unRoutes :: RoutesRead -> Identifier -> IO (Maybe FilePath, UsedMetadata)
+  }
 
 --------------------------------------------------------------------------------
 instance Monoid Routes where
-    mempty = Routes $ \_ _ -> return (Nothing, False)
-    mappend (Routes f) (Routes g) = Routes $ \p id' -> do
-        (mfp, um) <- f p id'
-        case mfp of
-            Nothing -> g p id'
-            Just _  -> return (mfp, um)
-
+  mempty = Routes $ \_ _ -> return (Nothing, False)
+  mappend (Routes f) (Routes g) =
+    Routes $ \p id' -> do
+      (mfp, um) <- f p id'
+      case mfp of
+        Nothing -> g p id'
+        Just _ -> return (mfp, um)
 
 --------------------------------------------------------------------------------
 -- | Apply a route to an identifier
-runRoutes :: Routes -> Provider -> Identifier
-          -> IO (Maybe FilePath, UsedMetadata)
-runRoutes routes provider identifier =
-    unRoutes routes (RoutesRead provider identifier) identifier
-
+runRoutes :: Routes -> Provider -> Identifier -> IO (Maybe FilePath, UsedMetadata)
+runRoutes routes provider identifier = unRoutes routes (RoutesRead provider identifier) identifier
 
 --------------------------------------------------------------------------------
 -- | A route that uses the identifier as filepath. For example, the target with
 -- ID @foo\/bar@ will be written to the file @foo\/bar@.
 idRoute :: Routes
 idRoute = customRoute toFilePath
-
 
 --------------------------------------------------------------------------------
 -- | Set (or replace) the extension of a route.
@@ -117,17 +112,17 @@ idRoute = customRoute toFilePath
 --
 -- > Just "posts/the-art-of-trolling.html"
 setExtension :: String -> Routes
-setExtension extension = customRoute $
-    (`replaceExtension` extension) . toFilePath
-
+setExtension extension = customRoute $ (`replaceExtension` extension) . toFilePath
 
 --------------------------------------------------------------------------------
 -- | Apply the route if the identifier matches the given pattern, fail
 -- otherwise
 matchRoute :: Pattern -> Routes -> Routes
-matchRoute pattern (Routes route) = Routes $ \p id' ->
-    if matches pattern id' then route p id' else return (Nothing, False)
-
+matchRoute pattern (Routes route) =
+  Routes $ \p id' ->
+    if matches pattern id'
+      then route p id'
+      else return (Nothing, False)
 
 --------------------------------------------------------------------------------
 -- | Create a custom route. This should almost always be used with
@@ -135,13 +130,11 @@ matchRoute pattern (Routes route) = Routes $ \p id' ->
 customRoute :: (Identifier -> FilePath) -> Routes
 customRoute f = Routes $ const $ \id' -> return (Just (f id'), False)
 
-
 --------------------------------------------------------------------------------
 -- | A route that always gives the same result. Obviously, you should only use
 -- this for a single compilation rule.
 constRoute :: FilePath -> Routes
 constRoute = customRoute . const
-
 
 --------------------------------------------------------------------------------
 -- | Create a gsub route
@@ -153,20 +146,19 @@ constRoute = customRoute . const
 -- Result:
 --
 -- > Just "tags/bar.xml"
-gsubRoute :: String              -- ^ Pattern
-          -> (String -> String)  -- ^ Replacement
-          -> Routes              -- ^ Resulting route
-gsubRoute pattern replacement = customRoute $
-    replaceAll pattern replacement . toFilePath
-
+gsubRoute
+  :: String -- ^ Pattern
+  -> (String -> String) -- ^ Replacement
+  -> Routes -- ^ Resulting route
+gsubRoute pattern replacement = customRoute $ replaceAll pattern replacement . toFilePath
 
 --------------------------------------------------------------------------------
 -- | Get access to the metadata in order to determine the route
 metadataRoute :: (Metadata -> Routes) -> Routes
-metadataRoute f = Routes $ \r i -> do
+metadataRoute f =
+  Routes $ \r i -> do
     metadata <- resourceMetadata (routesProvider r) (routesUnderlying r)
     unRoutes (f metadata) r i
-
 
 --------------------------------------------------------------------------------
 -- | Compose routes so that @f \`composeRoutes\` g@ is more or less equivalent
@@ -182,13 +174,26 @@ metadataRoute f = Routes $ \r i -> do
 -- > Just "tags/bar.xml"
 --
 -- If the first route given fails, Hakyll will not apply the second route.
-composeRoutes :: Routes  -- ^ First route to apply
-              -> Routes  -- ^ Second route to apply
-              -> Routes  -- ^ Resulting route
-composeRoutes (Routes f) (Routes g) = Routes $ \p i -> do
+composeRoutes
+  :: Routes -- ^ First route to apply
+  -> Routes -- ^ Second route to apply
+  -> Routes -- ^ Resulting route
+composeRoutes (Routes f) (Routes g) =
+  Routes $ \p i -> do
     (mfp, um) <- f p i
     case mfp of
-        Nothing -> return (Nothing, um)
-        Just fp -> do
-            (mfp', um') <- g p (fromFilePath fp)
-            return (mfp', um || um')
+      Nothing -> return (Nothing, um)
+      Just fp -> do
+        (mfp', um') <- g p (fromFilePath fp)
+        return (mfp', um || um')
+
+-- |
+--
+-- コンテンツハッシュに基づいてファイルパスを決定
+--
+contentHashRoute :: Routes
+contentHashRoute = do
+  Routes $
+    const $ \id' -> do
+      content <- BS.readFile $ toFilePath id'
+      return (Just (BSU.toString . hash $ content), False)
