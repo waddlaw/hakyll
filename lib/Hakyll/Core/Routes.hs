@@ -39,6 +39,7 @@ module Hakyll.Core.Routes
   , gsubRoute
   , metadataRoute
   , composeRoutes
+  , contentHashRoute
   ) where
 
 --------------------------------------------------------------------------------
