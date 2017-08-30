@@ -39,7 +39,7 @@ module Hakyll.Core.Routes
   , gsubRoute
   , metadataRoute
   , composeRoutes
-  , contentHashRoute
+  , customRouteIO
   ) where
 
 --------------------------------------------------------------------------------
@@ -52,9 +52,9 @@ import Hakyll.Core.Metadata
 import Hakyll.Core.Provider
 import Hakyll.Core.Util.String
 
+import Crypto.Hash.MD5 (hash)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.UTF8 as BSU
-import Crypto.Hash.MD5 (hash)
 
 --------------------------------------------------------------------------------
 -- | When you ran a route, it's useful to know whether or not this used
@@ -131,6 +131,17 @@ matchRoute pattern (Routes route) =
 customRoute :: (Identifier -> FilePath) -> Routes
 customRoute f = Routes $ const $ \id' -> return (Just (f id'), False)
 
+-- |
+--
+-- IO monad version of contentHashRoute
+--
+customRouteIO :: (Identifier -> IO FilePath) -> Routes
+customRouteIO m =
+  Routes $
+  const $ \id' -> do
+    v <- m id'
+    return (Just v, False)
+
 --------------------------------------------------------------------------------
 -- | A route that always gives the same result. Obviously, you should only use
 -- this for a single compilation rule.
@@ -187,14 +198,3 @@ composeRoutes (Routes f) (Routes g) =
       Just fp -> do
         (mfp', um') <- g p (fromFilePath fp)
         return (mfp', um || um')
-
--- |
---
--- コンテンツハッシュに基づいてファイルパスを決定
---
-contentHashRoute :: Routes
-contentHashRoute = do
-  Routes $
-    const $ \id' -> do
-      content <- BS.readFile $ toFilePath id'
-      return (Just (BSU.toString . hash $ content), False)
