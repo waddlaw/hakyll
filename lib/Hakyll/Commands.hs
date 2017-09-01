@@ -15,7 +15,7 @@ module Hakyll.Commands
 
 --------------------------------------------------------------------------------
 import           Control.Concurrent
-import           System.Exit                (ExitCode, exitWith)
+import           System.Exit                (ExitCode)
 
 --------------------------------------------------------------------------------
 import qualified Hakyll.Check               as Check

@@ -52,10 +52,6 @@ import Hakyll.Core.Metadata
 import Hakyll.Core.Provider
 import Hakyll.Core.Util.String
 
-import Crypto.Hash.MD5 (hash)
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.UTF8 as BSU
-
 --------------------------------------------------------------------------------
 -- | When you ran a route, it's useful to know whether or not this used
 -- metadata. This allows us to do more granular dependency analysis.
@@ -133,7 +129,7 @@ customRoute f = Routes $ const $ \id' -> return (Just (f id'), False)
 
 -- |
 --
--- IO monad version of contentHashRoute
+-- IO monad version of customRoute
 --
 customRouteIO :: (Identifier -> IO FilePath) -> Routes
 customRouteIO m =
