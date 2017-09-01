@@ -127,6 +127,7 @@ Library
     Hakyll.Web.Feed
     Hakyll.Web.Html
     Hakyll.Web.Html.RelativizeUrls
+    Hakyll.Web.Html.ContentHash
     Hakyll.Web.Paginate
     Hakyll.Web.Pandoc
     Hakyll.Web.Pandoc.Biblio
